@@ -26,6 +26,7 @@ jobs:
         with:
           distribution: temurin
           java-version: 25
+          
       - name: Build
         run: ./gradlew build
       - name: Upload test report
