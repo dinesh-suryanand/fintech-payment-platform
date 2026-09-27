@@ -1,0 +1,73 @@
+# Local practice lab: Postgres + Kafka (KRaft, no ZooKeeper) + Redis + Kafka UI
+#
+# Start:      docker compose up -d
+# Stop:       docker compose down          (add -v to also wipe data)
+# Load SQL:   docker exec -i prep-postgres psql -U prep -d fintech < fintech_practice_schema.sql
+# Kafka UI:   http://localhost:8080
+#
+# Spring Boot application.yml:
+#   spring.datasource.url: jdbc:postgresql://localhost:5432/fintech
+#   spring.datasource.username: prep      spring.datasource.password: prep
+#   spring.kafka.bootstrap-servers: localhost:9092
+#   spring.data.redis.host: localhost
+#
+# Useful Kafka CLI (run inside the container):
+#   docker exec -it prep-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --topic payment.events --partitions 3
+#   docker exec -it prep-kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group notification-service
+#
+# NOTE: images/tags below were chosen for local learning only. Check for newer tags if a pull fails.
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: prep-postgres
+    environment:
+      POSTGRES_USER: prep
+      POSTGRES_PASSWORD: prep
+      POSTGRES_DB: fintech
+    ports:
+      - "55432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  kafka:
+    image: apache/kafka:3.8.0
+    container_name: prep-kafka
+    ports:
+      - "9092:9092"        # host access (Spring Boot on your laptop)
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://:19092,HOST://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:19092,HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    volumes:
+      - kafkadata:/var/lib/kafka/data
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: prep-kafka-ui
+    depends_on:
+      - kafka
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:19092
+
+  redis:
+    image: redis:7
+    container_name: prep-redis
+    ports:
+      - "6379:6379"
+
+volumes:
+  pgdata:
+  kafkadata:
